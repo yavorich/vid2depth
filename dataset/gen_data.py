@@ -40,11 +40,11 @@ import numpy as np
 import scipy.misc
 import tensorflow as tf
 
-gfile = tf.gfile
+gfile = tf.io.gfile
 FLAGS = flags.FLAGS
 
 DATASETS = [
-    'kitti_raw_eigen', 'kitti_raw_stereo', 'kitti_odom', 'cityscapes', 'bike'
+    'kitti_raw_eigen', 'kitti_raw_stereo', 'kitti_odom', 'cityscapes', 'bike', 'custom'
 ]
 
 flags.DEFINE_enum('dataset_name', None, DATASETS, 'Dataset name.')
@@ -68,8 +68,8 @@ NUM_CHUNKS = 100
 
 def _generate_data():
   """Extract sequences from dataset_dir and store them in data_dir."""
-  if not gfile.Exists(FLAGS.data_dir):
-    gfile.MakeDirs(FLAGS.data_dir)
+  if not gfile.exists(FLAGS.data_dir):
+    gfile.makedirs(FLAGS.data_dir)
 
   global dataloader  # pylint: disable=global-variable-undefined
   if FLAGS.dataset_name == 'bike':
@@ -99,6 +99,11 @@ def _generate_data():
                                            img_height=FLAGS.img_height,
                                            img_width=FLAGS.img_width,
                                            seq_length=FLAGS.seq_length)
+  elif FLAGS.dataset_name == 'custom':
+    dataloader = dataset_loader.Custom(FLAGS.dataset_dir,
+                                           img_height=FLAGS.img_height,
+                                           img_width=FLAGS.img_width,
+                                           seq_length=FLAGS.seq_length)
   else:
     raise ValueError('Unknown dataset')
 
@@ -123,16 +128,16 @@ def _generate_data():
   # Split into training/validation sets. Fixed seed for repeatability.
   np.random.seed(8964)
 
-  if not gfile.Exists(FLAGS.data_dir):
-    gfile.MakeDirs(FLAGS.data_dir)
+  if not gfile.exists(FLAGS.data_dir):
+    gfile.makedirs(FLAGS.data_dir)
 
-  with gfile.Open(os.path.join(FLAGS.data_dir, 'train.txt'), 'w') as train_f:
-    with gfile.Open(os.path.join(FLAGS.data_dir, 'val.txt'), 'w') as val_f:
+  with gfile.GFile(os.path.join(FLAGS.data_dir, 'train.txt'), 'w') as train_f:
+    with gfile.GFile(os.path.join(FLAGS.data_dir, 'val.txt'), 'w') as val_f:
       logging.info('Generating data...')
       for index, frame_chunk in enumerate(frame_chunks):
         all_examples.clear()
         pool.map(_gen_example_star,
-                 itertools.izip(frame_chunk, itertools.repeat(all_examples)))
+                 zip(frame_chunk, itertools.repeat(all_examples)))
         logging.info('Chunk %d/%d: saving %s entries...', index + 1, NUM_CHUNKS,
                      len(all_examples))
         for _, example in all_examples.items():
@@ -160,8 +165,8 @@ def _gen_example(i, all_examples):
   cx = intrinsics[0, 2]
   cy = intrinsics[1, 2]
   save_dir = os.path.join(FLAGS.data_dir, example['folder_name'])
-  if not gfile.Exists(save_dir):
-    gfile.MakeDirs(save_dir)
+  if not gfile.exists(save_dir):
+    gfile.makedirs(save_dir)
   img_filepath = os.path.join(save_dir, '%s.jpg' % example['file_name'])
   scipy.misc.imsave(img_filepath, image_seq_stack.astype(np.uint8))
   cam_filepath = os.path.join(save_dir, '%s_cam.txt' % example['file_name'])
